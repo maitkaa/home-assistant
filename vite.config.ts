@@ -6,5 +6,8 @@ import tsconfigPaths from "vite-tsconfig-paths";
 installGlobals();
 
 export default defineConfig({
+  ssr: {
+    noExternal: ["remix-utils"],
+  },
   plugins: [remix(), tsconfigPaths()],
 });
