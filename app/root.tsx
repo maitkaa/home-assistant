@@ -52,7 +52,6 @@ export function App() {
         <Outlet/>
         <ScrollRestoration/>
         <Scripts/>
-        <LiveReload/>
         </body>
         </html>
     )
