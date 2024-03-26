@@ -1,4 +1,4 @@
-import type { MetaFunction } from "@remix-run/node";
+import {json, LoaderFunctionArgs, MetaFunction} from "@remix-run/node";
 
 export const meta: MetaFunction = () => {
   return [
@@ -6,26 +6,107 @@ export const meta: MetaFunction = () => {
     { name: "description", content: "Welcome to Remix!" },
   ];
 };
-
 import {
-  Activity,
-  ArrowUpRight,
-  CreditCard,
+  Calendar,
+  ThermometerSnowflake,
+  ThermometerSun,
   DollarSign,
   Menu,
   Package2,
-  Users,
+  Users, Bird, Thermometer,
 } from "lucide-react"
-import {Link} from '@remix-run/react';
+import {Link, useLoaderData} from '@remix-run/react';
 import {Sheet, SheetContent, SheetTrigger} from '../@/components/ui/sheet';
 import {Button} from '../@/components/ui/button';
 import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '../@/components/ui/card';
-import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from '../@/components/ui/table';
-import {Badge} from '../@/components/ui/badge';
-import {Avatar, AvatarFallback, AvatarImage} from '../@/components/ui/avatar';
+import {Avatar, AvatarFallback} from '../@/components/ui/avatar';
 import {ModeToggle} from '../components/mode-toggle';
+import { ClientOnly } from "remix-utils/client-only";
+import { faker } from '@faker-js/faker';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend,
+} from 'chart.js/auto';
+import { Line } from 'react-chartjs-2';
+import {useEffect, useState} from 'react';
+
+ChartJS.register(
+    CategoryScale,
+    LinearScale,
+    PointElement,
+    LineElement,
+    Title,
+    Tooltip,
+    Legend
+);
+
+
+export const loader = async ({ request }: LoaderFunctionArgs) => {
+  const labels = Array.from({ length: 24 }, (_, i) => `${String(i).padStart(2, '0')}:00`);
+  const options = {
+    responsive: true,
+    plugins: {
+      legend: {
+        position: 'top' as const,
+      },
+      title: {
+        display: true,
+        text: 'Õhu temperatuurid',
+      },
+    },
+  };
+
+  const data = {
+    labels,
+    datasets: [
+      {
+        label: 'Magamistuba',
+        data: labels.map(() => faker.number.int({ min: -35, max: 40 })),
+        borderColor: 'rgb(255, 99, 132)',
+        backgroundColor: 'rgba(255, 99, 132, 0.5)',
+      },
+      {
+        label: 'Elutuba',
+        data: labels.map(() => faker.number.int({ min: -35, max: 40 })),
+        borderColor: 'rgb(53, 162, 235)',
+        backgroundColor: 'rgba(53, 162, 235, 0.5)',
+      },
+      {
+        label: 'Õues',
+        data: labels.map(() => faker.number.int({ min: -35, max: 40 })),
+        borderColor: 'rgb(71,199,35)',
+        backgroundColor: 'rgba(18,108,6,0.5)',
+      },
+    ],
+  };
+  return json({ options, data });
+}
 
 export default function Dashboard() {
+  const { options, data } = useLoaderData<typeof loader>();
+
+  const [currentDate, setCurrentDate] = useState(new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentDate(new Date());
+    }, 60000);
+    return () => {
+      clearInterval(timer);
+    };
+  }, []);
+
+  const dayOfWeek = currentDate.toLocaleString('et-EE', { weekday: 'long' });
+  const date = currentDate.toLocaleString('et-EE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const time = currentDate.toLocaleString('et-EE', { hour: '2-digit', minute: '2-digit' });
+
+
   return (
       <div className="flex min-h-screen w-full flex-col">
         <header className="sticky top-0 flex h-16 items-center gap-4 border-b bg-background px-4 md:px-6">
@@ -50,39 +131,8 @@ export default function Dashboard() {
             </SheetTrigger>
             <SheetContent side="left">
               <nav className="grid gap-6 text-lg font-medium">
-                <Link
-                    to="#"
-                    className="flex items-center gap-2 text-lg font-semibold"
-                >
-                  <Package2 className="h-6 w-6" />
-                  <span className="sr-only">Acme Inc</span>
-                </Link>
-                <Link to="#" className="hover:text-foreground">
+                <Link to="/" className="hover:text-foreground">
                   Dashboard
-                </Link>
-                <Link
-                    to="#"
-                    className="text-muted-foreground hover:text-foreground"
-                >
-                  Orders
-                </Link>
-                <Link
-                    to="#"
-                    className="text-muted-foreground hover:text-foreground"
-                >
-                  Products
-                </Link>
-                <Link
-                    to="#"
-                    className="text-muted-foreground hover:text-foreground"
-                >
-                  Customers
-                </Link>
-                <Link
-                    to="#"
-                    className="text-muted-foreground hover:text-foreground"
-                >
-                  Analytics
                 </Link>
               </nav>
             </SheetContent>
@@ -94,16 +144,16 @@ export default function Dashboard() {
           </div>
         </header>
         <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-8">
-          <div className="grid gap-4 md:grid-cols-2 md:gap-8 lg:grid-cols-4">
+          <div className="grid gap-4 md:grid-cols-2 md:gap-8 lg:grid-cols-4 xl:grid-cols-4">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">
-                  Total Revenue
+                  Päeva max temperatuur
                 </CardTitle>
-                <DollarSign className="h-4 w-4 text-muted-foreground" />
+                <ThermometerSun className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">$45,231.89</div>
+                <div className="text-2xl font-bold">23.4 °C</div>
                 <p className="text-xs text-muted-foreground">
                   +20.1% from last month
                 </p>
@@ -112,12 +162,12 @@ export default function Dashboard() {
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">
-                  Subscriptions
+                  Päeva min temperatuur
                 </CardTitle>
-                <Users className="h-4 w-4 text-muted-foreground" />
+                <ThermometerSnowflake className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">+2350</div>
+                <div className="text-2xl font-bold">21.4 °C</div>
                 <p className="text-xs text-muted-foreground">
                   +180.1% from last month
                 </p>
@@ -125,26 +175,28 @@ export default function Dashboard() {
             </Card>
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Sales</CardTitle>
-                <CreditCard className="h-4 w-4 text-muted-foreground" />
+                <CardTitle className="text-sm font-medium">
+                  Õues
+                </CardTitle>
+                <Thermometer className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">+12,234</div>
+                <div className="text-2xl font-bold">25.5 °C</div>
                 <p className="text-xs text-muted-foreground">
-                  +19% from last month
+                  +180.1% from last month
                 </p>
               </CardContent>
             </Card>
-            <Card>
+            <Card className={"ml-auto"}>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Active Now</CardTitle>
-                <Activity className="h-4 w-4 text-muted-foreground" />
+                <CardTitle className="text-sm font-medium capitalize">{dayOfWeek}</CardTitle>
+                <p className="text-xs text-muted-foreground">
+                  {date}
+                </p>
+                <Calendar className="h-4 w-4 text-muted-foreground"/>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">+573</div>
-                <p className="text-xs text-muted-foreground">
-                  +201 since last hour
-                </p>
+                <div className="text-3xl font-bold p-10">{time}</div>
               </CardContent>
             </Card>
           </div>
@@ -152,219 +204,55 @@ export default function Dashboard() {
             <Card className="xl:col-span-2">
               <CardHeader className="flex flex-row items-center">
                 <div className="grid gap-2">
-                  <CardTitle>Transactions</CardTitle>
+                  <CardTitle>Graafik</CardTitle>
                   <CardDescription>
-                    Recent transactions from your store.
+                    Viimane seis
                   </CardDescription>
                 </div>
-                <Button asChild size="sm" className="ml-auto gap-1">
-                  <Link to="#">
-                    View All
-                    <ArrowUpRight className="h-4 w-4" />
-                  </Link>
-                </Button>
               </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Customer</TableHead>
-                      <TableHead className="hidden xl:table-column">
-                        Type
-                      </TableHead>
-                      <TableHead className="hidden xl:table-column">
-                        Status
-                      </TableHead>
-                      <TableHead className="hidden xl:table-column">
-                        Date
-                      </TableHead>
-                      <TableHead className="text-right">Amount</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    <TableRow>
-                      <TableCell>
-                        <div className="font-medium">Liam Johnson</div>
-                        <div className="hidden text-sm text-muted-foreground md:inline">
-                          liam@example.com
-                        </div>
-                      </TableCell>
-                      <TableCell className="hidden xl:table-column">
-                        Sale
-                      </TableCell>
-                      <TableCell className="hidden xl:table-column">
-                        <Badge className="text-xs" variant="outline">
-                          Approved
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell lg:hidden xl:table-column">
-                        2023-06-23
-                      </TableCell>
-                      <TableCell className="text-right">$250.00</TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell>
-                        <div className="font-medium">Olivia Smith</div>
-                        <div className="hidden text-sm text-muted-foreground md:inline">
-                          olivia@example.com
-                        </div>
-                      </TableCell>
-                      <TableCell className="hidden xl:table-column">
-                        Refund
-                      </TableCell>
-                      <TableCell className="hidden xl:table-column">
-                        <Badge className="text-xs" variant="outline">
-                          Declined
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell lg:hidden xl:table-column">
-                        2023-06-24
-                      </TableCell>
-                      <TableCell className="text-right">$150.00</TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell>
-                        <div className="font-medium">Noah Williams</div>
-                        <div className="hidden text-sm text-muted-foreground md:inline">
-                          noah@example.com
-                        </div>
-                      </TableCell>
-                      <TableCell className="hidden xl:table-column">
-                        Subscription
-                      </TableCell>
-                      <TableCell className="hidden xl:table-column">
-                        <Badge className="text-xs" variant="outline">
-                          Approved
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell lg:hidden xl:table-column">
-                        2023-06-25
-                      </TableCell>
-                      <TableCell className="text-right">$350.00</TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell>
-                        <div className="font-medium">Emma Brown</div>
-                        <div className="hidden text-sm text-muted-foreground md:inline">
-                          emma@example.com
-                        </div>
-                      </TableCell>
-                      <TableCell className="hidden xl:table-column">
-                        Sale
-                      </TableCell>
-                      <TableCell className="hidden xl:table-column">
-                        <Badge className="text-xs" variant="outline">
-                          Approved
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell lg:hidden xl:table-column">
-                        2023-06-26
-                      </TableCell>
-                      <TableCell className="text-right">$450.00</TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell>
-                        <div className="font-medium">Liam Johnson</div>
-                        <div className="hidden text-sm text-muted-foreground md:inline">
-                          liam@example.com
-                        </div>
-                      </TableCell>
-                      <TableCell className="hidden xl:table-column">
-                        Sale
-                      </TableCell>
-                      <TableCell className="hidden xl:table-column">
-                        <Badge className="text-xs" variant="outline">
-                          Approved
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell lg:hidden xl:table-column">
-                        2023-06-27
-                      </TableCell>
-                      <TableCell className="text-right">$550.00</TableCell>
-                    </TableRow>
-                  </TableBody>
-                </Table>
+              <CardContent >
+                <ClientOnly fallback={<Fallback />}>
+                  {() => <Line options={options} data={data} />}
+                </ClientOnly>
               </CardContent>
             </Card>
             <Card>
               <CardHeader>
-                <CardTitle>Recent Sales</CardTitle>
+                <CardTitle>Viimased mõõtmised</CardTitle>
               </CardHeader>
               <CardContent className="grid gap-8">
                 <div className="flex items-center gap-4">
                   <Avatar className="hidden h-9 w-9 sm:flex">
-                    <AvatarImage src="/avatars/01.png" alt="Avatar" />
-                    <AvatarFallback>OM</AvatarFallback>
+                    <AvatarFallback>E</AvatarFallback>
                   </Avatar>
                   <div className="grid gap-1">
                     <p className="text-sm font-medium leading-none">
-                      Olivia Martin
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      olivia.martin@email.com
+                        Elutuba
                     </p>
                   </div>
-                  <div className="ml-auto font-medium">+$1,999.00</div>
+                  <div className="ml-auto font-medium">21.3 °C</div>
                 </div>
                 <div className="flex items-center gap-4">
                   <Avatar className="hidden h-9 w-9 sm:flex">
-                    <AvatarImage src="/avatars/02.png" alt="Avatar" />
-                    <AvatarFallback>JL</AvatarFallback>
+                    <AvatarFallback>M</AvatarFallback>
                   </Avatar>
                   <div className="grid gap-1">
                     <p className="text-sm font-medium leading-none">
-                      Jackson Lee
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      jackson.lee@email.com
+                     Magamistuba
                     </p>
                   </div>
-                  <div className="ml-auto font-medium">+$39.00</div>
+                  <div className="ml-auto font-medium">24.5 °C</div>
                 </div>
                 <div className="flex items-center gap-4">
                   <Avatar className="hidden h-9 w-9 sm:flex">
-                    <AvatarImage src="/avatars/03.png" alt="Avatar" />
-                    <AvatarFallback>IN</AvatarFallback>
+                    <AvatarFallback>Õ</AvatarFallback>
                   </Avatar>
                   <div className="grid gap-1">
                     <p className="text-sm font-medium leading-none">
-                      Isabella Nguyen
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      isabella.nguyen@email.com
+                     Õues
                     </p>
                   </div>
-                  <div className="ml-auto font-medium">+$299.00</div>
-                </div>
-                <div className="flex items-center gap-4">
-                  <Avatar className="hidden h-9 w-9 sm:flex">
-                    <AvatarImage src="/avatars/04.png" alt="Avatar" />
-                    <AvatarFallback>WK</AvatarFallback>
-                  </Avatar>
-                  <div className="grid gap-1">
-                    <p className="text-sm font-medium leading-none">
-                      William Kim
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      will@email.com
-                    </p>
-                  </div>
-                  <div className="ml-auto font-medium">+$99.00</div>
-                </div>
-                <div className="flex items-center gap-4">
-                  <Avatar className="hidden h-9 w-9 sm:flex">
-                    <AvatarImage src="/avatars/05.png" alt="Avatar" />
-                    <AvatarFallback>SD</AvatarFallback>
-                  </Avatar>
-                  <div className="grid gap-1">
-                    <p className="text-sm font-medium leading-none">
-                      Sofia Davis
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      sofia.davis@email.com
-                    </p>
-                  </div>
-                  <div className="ml-auto font-medium">+$39.00</div>
+                  <div className="ml-auto font-medium">24.5 °C</div>
                 </div>
               </CardContent>
             </Card>
@@ -372,4 +260,8 @@ export default function Dashboard() {
         </main>
       </div>
   )
+}
+
+function Fallback() {
+  return <div>Generating Chart</div>;
 }
