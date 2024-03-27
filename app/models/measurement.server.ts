@@ -5,7 +5,7 @@ export async function createMeasurement(value: number, measurePoint: MeasurePoin
     return db.mesurements.create({
         data: {
             value,
-            measurePoints: measurePoint
+            measurePoint: measurePoint
         }
     });
 }
