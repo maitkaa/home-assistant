@@ -16,5 +16,4 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
-  assetsInclude: ["react-charts", "d3-time-format"],//TODO-MAIT check if this is needed
 });

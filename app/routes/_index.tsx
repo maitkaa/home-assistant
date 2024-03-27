@@ -10,10 +10,8 @@ import {
   Calendar,
   ThermometerSnowflake,
   ThermometerSun,
-  DollarSign,
   Menu,
-  Package2,
-  Users, Bird, Thermometer,
+  Thermometer,
 } from "lucide-react"
 import {Link, useLoaderData} from '@remix-run/react';
 import {Sheet, SheetContent, SheetTrigger} from '../@/components/ui/sheet';
