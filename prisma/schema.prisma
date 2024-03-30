@@ -13,7 +13,7 @@ enum MeasurePoint {
   OUTSIDE
 }
 
-model Mesurements {
+model Measurements {
   id           String        @id @default(cuid())
   measurePoint MeasurePoint?
   value        Float

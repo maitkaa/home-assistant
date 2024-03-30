@@ -11,7 +11,7 @@ import {
   ThermometerSnowflake,
   ThermometerSun,
   Menu,
-  Thermometer,
+  Thermometer, Bed, CookingPot,
 } from "lucide-react"
 import {Link, useLoaderData} from '@remix-run/react';
 import {Sheet, SheetContent, SheetTrigger} from '../@/components/ui/sheet';
@@ -20,7 +20,7 @@ import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '../@/co
 import {Avatar, AvatarFallback} from '../@/components/ui/avatar';
 import {ModeToggle} from '../components/mode-toggle';
 import { ClientOnly } from "remix-utils/client-only";
-import { faker } from '@faker-js/faker';
+
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -33,6 +33,14 @@ import {
 } from 'chart.js/auto';
 import { Line } from 'react-chartjs-2';
 import {useEffect, useState} from 'react';
+import {MeasurePoint} from '@prisma/client';
+import {
+  getFirstMeasurementByMeasurePoint, getHighestValueTodayByMeasurePoint, getLastTenMeasurements,
+  getLowestValueTodayByMeasurePoint,
+  getMeasurementsLast24Hours, getTemperatureDifference
+} from '../models/measurement.server';
+import {formatMeasurementsData, generateLabels} from '../utils/data.server';
+import {TooltipContent, TooltipProvider, TooltipTrigger, Tooltip as TooltipUI} from '../@/components/ui/tooltip';
 
 ChartJS.register(
     CategoryScale,
@@ -46,7 +54,7 @@ ChartJS.register(
 
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const labels = Array.from({ length: 24 }, (_, i) => `${String(i).padStart(2, '0')}:00`);
+  const labels = generateLabels();
   const options = {
     responsive: true,
     plugins: {
@@ -65,31 +73,52 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     datasets: [
       {
         label: 'Magamistuba',
-        data: labels.map(() => faker.number.int({ min: -35, max: 40 })),
+        data: formatMeasurementsData(await getMeasurementsLast24Hours(MeasurePoint.BEDROOM)),
         borderColor: 'rgb(255, 99, 132)',
         backgroundColor: 'rgba(255, 99, 132, 0.5)',
       },
       {
         label: 'Elutuba',
-        data: labels.map(() => faker.number.int({ min: -35, max: 40 })),
+        data: formatMeasurementsData(await getMeasurementsLast24Hours(MeasurePoint.LIVING_ROOM)),
         borderColor: 'rgb(53, 162, 235)',
         backgroundColor: 'rgba(53, 162, 235, 0.5)',
       },
       {
         label: 'Õues',
-        data: labels.map(() => faker.number.int({ min: -35, max: 40 })),
+        data: formatMeasurementsData(await getMeasurementsLast24Hours(MeasurePoint.OUTSIDE)),
         borderColor: 'rgb(71,199,35)',
         backgroundColor: 'rgba(18,108,6,0.5)',
       },
     ],
   };
-  return json({ options, data });
+  const bedroomMin = await getLowestValueTodayByMeasurePoint(MeasurePoint.BEDROOM);
+  const bedroomMax = await getHighestValueTodayByMeasurePoint(MeasurePoint.BEDROOM);
+  const livingRoomMin = await getLowestValueTodayByMeasurePoint(MeasurePoint.LIVING_ROOM);
+  const livingRoomMax = await getHighestValueTodayByMeasurePoint(MeasurePoint.LIVING_ROOM);
+
+  return json({
+    options,
+    data,
+    latestMeasurements: await getLastTenMeasurements(),
+    currentOutside: await getFirstMeasurementByMeasurePoint(MeasurePoint.OUTSIDE),
+    bedroom: {
+      min: bedroomMin?.value,
+      max: bedroomMax?.value,
+      diff: getTemperatureDifference(MeasurePoint.BEDROOM)
+    },
+    livingRoom: {
+      min: livingRoomMin?.value,
+      max: livingRoomMax?.value,
+      diff: getTemperatureDifference(MeasurePoint.LIVING_ROOM)
+    }
+  });
 }
 
 export default function Dashboard() {
-  const { options, data } = useLoaderData<typeof loader>();
+  const { options, data, latestMeasurements, bedroom, livingRoom, currentOutside } = useLoaderData<typeof loader>();
 
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [currentRoom, setCurrentRoom] = useState('bedroom');
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -100,10 +129,20 @@ export default function Dashboard() {
     };
   }, []);
 
+  useEffect(() => {
+    const roomSwitcher = setInterval(() => {
+      setCurrentRoom(prevRoom => prevRoom === 'bedroom' ? 'livingRoom' : 'bedroom');
+    }, 2000);
+    return () => {
+      clearInterval(roomSwitcher);
+    };
+  }, []);
+
   const dayOfWeek = currentDate.toLocaleString('et-EE', { weekday: 'long' });
   const date = currentDate.toLocaleString('et-EE', { day: '2-digit', month: '2-digit', year: 'numeric' });
   const time = currentDate.toLocaleString('et-EE', { hour: '2-digit', minute: '2-digit' });
-
+  const currentData = currentRoom === 'bedroom' ? bedroom : livingRoom;
+  const currentIcon = currentRoom === 'bedroom' ? <Bed className="h-4 w-4 text-muted-foreground" /> : <CookingPot className="h-4 w-4 text-muted-foreground" />;
 
   return (
       <div className="flex min-h-screen w-full flex-col">
@@ -113,7 +152,7 @@ export default function Dashboard() {
                 to="/"
                 className="text-foreground transition-colors hover:text-foreground"
             >
-              Dashboard
+              Töölaud
             </Link>
           </nav>
           <Sheet>
@@ -143,29 +182,31 @@ export default function Dashboard() {
         </header>
         <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-8">
           <div className="grid gap-4 md:grid-cols-2 md:gap-8 lg:grid-cols-4 xl:grid-cols-4">
-            <Card>
+            <Card id={"maxTemp"}>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">
                   Päeva max temperatuur
+                  {currentIcon}
                 </CardTitle>
                 <ThermometerSun className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">23.4 °C</div>
+                <div className="text-2xl font-bold">{currentData.max} °C</div>
                 <p className="text-xs text-muted-foreground">
                   +20.1% from last month
                 </p>
               </CardContent>
             </Card>
-            <Card>
+            <Card id={"minTemp"}>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">
                   Päeva min temperatuur
+                  {currentIcon}
                 </CardTitle>
                 <ThermometerSnowflake className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">21.4 °C</div>
+                <div className="text-2xl font-bold">{currentData.min} °C</div>
                 <p className="text-xs text-muted-foreground">
                   +180.1% from last month
                 </p>
@@ -179,7 +220,7 @@ export default function Dashboard() {
                 <Thermometer className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">25.5 °C</div>
+                <div className="text-2xl font-bold">{currentOutside?.value} °C</div>
                 <p className="text-xs text-muted-foreground">
                   +180.1% from last month
                 </p>
@@ -218,40 +259,58 @@ export default function Dashboard() {
               <CardHeader>
                 <CardTitle>Viimased mõõtmised</CardTitle>
               </CardHeader>
-              <CardContent className="grid gap-8">
-                <div className="flex items-center gap-4">
-                  <Avatar className="hidden h-9 w-9 sm:flex">
-                    <AvatarFallback>E</AvatarFallback>
-                  </Avatar>
-                  <div className="grid gap-1">
-                    <p className="text-sm font-medium leading-none">
-                        Elutuba
-                    </p>
-                  </div>
-                  <div className="ml-auto font-medium">21.3 °C</div>
-                </div>
-                <div className="flex items-center gap-4">
-                  <Avatar className="hidden h-9 w-9 sm:flex">
-                    <AvatarFallback>M</AvatarFallback>
-                  </Avatar>
-                  <div className="grid gap-1">
-                    <p className="text-sm font-medium leading-none">
-                     Magamistuba
-                    </p>
-                  </div>
-                  <div className="ml-auto font-medium">24.5 °C</div>
-                </div>
-                <div className="flex items-center gap-4">
-                  <Avatar className="hidden h-9 w-9 sm:flex">
-                    <AvatarFallback>Õ</AvatarFallback>
-                  </Avatar>
-                  <div className="grid gap-1">
-                    <p className="text-sm font-medium leading-none">
-                     Õues
-                    </p>
-                  </div>
-                  <div className="ml-auto font-medium">24.5 °C</div>
-                </div>
+              <CardContent className="grid gap-8" id={"lastMeasurements"}>
+                {latestMeasurements.map((measurement, index) => {
+                  let avatarFallback;
+                  let tooltipContent;
+                  switch (measurement.measurePoint) {
+                    case MeasurePoint.BEDROOM:
+                      avatarFallback = 'M';
+                      tooltipContent = 'Magamistuba';
+                      break;
+                    case MeasurePoint.LIVING_ROOM:
+                      avatarFallback = 'E';
+                      tooltipContent = 'Elutuba';
+                      break;
+                    case MeasurePoint.OUTSIDE:
+                      avatarFallback = 'Õ';
+                      tooltipContent = 'Õues';
+                      break;
+                    default:
+                      avatarFallback = '';
+                      tooltipContent = '';
+                  }
+
+                  return (
+                      <div key={index} className="flex items-center gap-4">
+                        <TooltipProvider>
+                          <TooltipUI>
+                            <TooltipTrigger>
+                              <Avatar className="hidden h-9 w-9 sm:flex">
+                                <AvatarFallback>{avatarFallback}</AvatarFallback>
+                              </Avatar>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>{tooltipContent}</p>
+                            </TooltipContent>
+                          </TooltipUI>
+                        </TooltipProvider>
+                        <div className="grid gap-1">
+                          <p className="text-sm font-medium leading-none">
+                            {new Date(measurement.createdAt).toLocaleString('et-EE', {
+                              day: '2-digit',
+                              month: '2-digit',
+                              year: 'numeric'
+                            })} {new Date(measurement.createdAt).toLocaleString('et-EE', {
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
+                          </p>
+                        </div>
+                        <div className="ml-auto font-medium">{measurement.value} °C</div>
+                      </div>
+                  );
+                })}
               </CardContent>
             </Card>
           </div>
