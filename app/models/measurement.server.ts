@@ -6,6 +6,11 @@ export interface MeasurementAverage {
     average_value: number;
 }
 
+export interface TemperatureDifference {
+    minTemperatureDifference: number;
+    maxTemperatureDifference: number;
+}
+
 export async function createMeasurement(value: number, measurePoint: MeasurePoint) {
     return db.measurements.create({
         data: {
@@ -115,7 +120,8 @@ export async function getMeasurementsLast24Hours(measurePoint: MeasurePoint): Pr
     return result as MeasurementAverage[];
 }
 
-export async function getTemperatureDifference(measurePoint: MeasurePoint) {
+
+export async function getTemperatureDifference(measurePoint: MeasurePoint): Promise<TemperatureDifference | undefined> {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
