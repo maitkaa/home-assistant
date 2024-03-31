@@ -1,4 +1,4 @@
-import {json, LoaderFunctionArgs, MetaFunction} from "@remix-run/node";
+import {json, MetaFunction} from "@remix-run/node";
 
 export const meta: MetaFunction = () => {
     return [
@@ -36,11 +36,12 @@ import {MeasurePoint} from '@prisma/client';
 import {
     getFirstMeasurementByMeasurePoint, getHighestValueTodayByMeasurePoint, getLastTenMeasurements,
     getLowestValueTodayByMeasurePoint,
-    getMeasurementsLast24Hours, getTemperatureDifference, TemperatureDifference
+    getMeasurementsForChart, getTemperatureDifference, TemperatureDifference
 } from '../models/measurement.server';
 import {formatMeasurementsData, generateLabels} from '../utils/data.server';
 import {TooltipContent, TooltipProvider, TooltipTrigger, Tooltip as TooltipUI} from '../@/components/ui/tooltip';
 import {useLiveLoader} from '../utils/use-live-loader';
+import {measurePointConfig} from '../utils/sensors';
 
 ChartJS.register(
     CategoryScale,
@@ -79,19 +80,19 @@ export const loader = async () => {
         datasets: [
             {
                 label: 'Magamistuba',
-                data: formatMeasurementsData(await getMeasurementsLast24Hours(MeasurePoint.BEDROOM)),
+                data: formatMeasurementsData(await getMeasurementsForChart(MeasurePoint.BEDROOM)),
                 borderColor: 'rgb(255, 99, 132)',
                 backgroundColor: 'rgba(255, 99, 132, 0.5)',
             },
             {
                 label: 'Elutuba',
-                data: formatMeasurementsData(await getMeasurementsLast24Hours(MeasurePoint.LIVING_ROOM)),
+                data: formatMeasurementsData(await getMeasurementsForChart(MeasurePoint.LIVING_ROOM)),
                 borderColor: 'rgb(53, 162, 235)',
                 backgroundColor: 'rgba(53, 162, 235, 0.5)',
             },
             {
                 label: 'Õues',
-                data: formatMeasurementsData(await getMeasurementsLast24Hours(MeasurePoint.OUTSIDE)),
+                data: formatMeasurementsData(await getMeasurementsForChart(MeasurePoint.OUTSIDE)),
                 borderColor: 'rgb(71,199,35)',
                 backgroundColor: 'rgba(18,108,6,0.5)',
             },
@@ -223,9 +224,11 @@ export default function Dashboard() {
                             <ThermometerSun className="h-4 w-4 text-muted-foreground"/>
                         </CardHeader>
                         <CardContent>
-                            <motion.div className="text-2xl font-bold" variants={variants} animate={false ? 'hide' : 'show'}>{currentIcon} {currentData.max} °C</motion.div>
+                            <motion.div className="text-2xl font-bold" variants={variants}
+                                        animate={'show'}>{currentIcon} {currentData.max} °C
+                            </motion.div>
                             {currentData?.diff?.minTemperatureDifference && (
-                                <motion.p className="text-xs text-muted-foreground pt-2" >
+                                <motion.p className="text-xs text-muted-foreground pt-2">
                                     {currentData.diff.minTemperatureDifference.toFixed(2)} % soojem kui eile
                                 </motion.p>
                             )}
@@ -297,60 +300,45 @@ export default function Dashboard() {
                         <CardContent className="grid gap-8" id={"lastMeasurements"}>
                             <AnimatePresence mode={"sync"}>
                                 {latestMeasurements.map((measurement, index) => {
-                                    let avatarFallback;
-                                    let tooltipContent;
-                                    switch (measurement.measurePoint) {
-                                        case MeasurePoint.BEDROOM:
-                                            avatarFallback = 'M';
-                                            tooltipContent = 'Magamistuba';
-                                            break;
-                                        case MeasurePoint.LIVING_ROOM:
-                                            avatarFallback = 'E';
-                                            tooltipContent = 'Elutuba';
-                                            break;
-                                        case MeasurePoint.OUTSIDE:
-                                            avatarFallback = 'Õ';
-                                            tooltipContent = 'Õues';
-                                            break;
-                                        default:
-                                            avatarFallback = '';
-                                            tooltipContent = '';
+                                    if (measurement.measurePoint !== null) {
+                                        const config = measurePointConfig[measurement.measurePoint];
+                                        const avatarFallback = config.avatarFallback;
+                                        const tooltipContent = config.name;
+                                        return (
+                                            <motion.div key={index} className="flex items-center gap-4"
+                                                        layout
+                                                        animate={{scale: 1, opacity: 1}}
+                                                        exit={{scale: 0.8, opacity: 0}}
+                                                        transition={{type: "spring"}}
+                                            >
+                                                <TooltipProvider>
+                                                    <TooltipUI>
+                                                        <TooltipTrigger>
+                                                            <Avatar className="hidden h-9 w-9 sm:flex">
+                                                                <AvatarFallback>{avatarFallback}</AvatarFallback>
+                                                            </Avatar>
+                                                        </TooltipTrigger>
+                                                        <TooltipContent>
+                                                            <p>{tooltipContent}</p>
+                                                        </TooltipContent>
+                                                    </TooltipUI>
+                                                </TooltipProvider>
+                                                <div className="grid gap-1">
+                                                    <p className="text-sm font-medium leading-none">
+                                                        {new Date(measurement.createdAt).toLocaleString('et-EE', {
+                                                            day: '2-digit',
+                                                            month: '2-digit',
+                                                            year: 'numeric'
+                                                        })} {new Date(measurement.createdAt).toLocaleString('et-EE', {
+                                                        hour: '2-digit',
+                                                        minute: '2-digit'
+                                                    })}
+                                                    </p>
+                                                </div>
+                                                <div className="ml-auto font-medium">{measurement.value} °C</div>
+                                            </motion.div>
+                                        );
                                     }
-
-                                    return (
-                                        <motion.div key={index} className="flex items-center gap-4"
-                                                    layout
-                                                    animate={{scale: 1, opacity: 1}}
-                                                    exit={{scale: 0.8, opacity: 0}}
-                                                    transition={{type: "spring"}}
-                                        >
-                                            <TooltipProvider>
-                                                <TooltipUI>
-                                                    <TooltipTrigger>
-                                                        <Avatar className="hidden h-9 w-9 sm:flex">
-                                                            <AvatarFallback>{avatarFallback}</AvatarFallback>
-                                                        </Avatar>
-                                                    </TooltipTrigger>
-                                                    <TooltipContent>
-                                                        <p>{tooltipContent}</p>
-                                                    </TooltipContent>
-                                                </TooltipUI>
-                                            </TooltipProvider>
-                                            <div className="grid gap-1">
-                                                <p className="text-sm font-medium leading-none">
-                                                    {new Date(measurement.createdAt).toLocaleString('et-EE', {
-                                                        day: '2-digit',
-                                                        month: '2-digit',
-                                                        year: 'numeric'
-                                                    })} {new Date(measurement.createdAt).toLocaleString('et-EE', {
-                                                    hour: '2-digit',
-                                                    minute: '2-digit'
-                                                })}
-                                                </p>
-                                            </div>
-                                            <div className="ml-auto font-medium">{measurement.value} °C</div>
-                                        </motion.div>
-                                    );
                                 })}
                             </AnimatePresence>
                         </CardContent>
@@ -362,5 +350,5 @@ export default function Dashboard() {
 }
 
 function Fallback() {
-    return <div>Generating Chart</div>;
+    return <div>Generating Chart...</div>;
 }

@@ -1,39 +1,55 @@
-FROM node:20.2.0-alpine3.18 as base
+# base node image
+FROM node:20-bullseye-slim as base
 
+# set for base and all layer that inherit from it
+ENV NODE_ENV production
+
+# Install openssl for Prisma
+RUN apt-get update && apt-get install -y openssl
+
+# Install all node_modules, including dev dependencies
 FROM base as deps
 
-WORKDIR /app
+WORKDIR /myapp
 
-COPY package*.json ./
+ADD package.json .npmrc ./
+RUN npm install --include=dev
 
-RUN npm install
+# Setup production node_modules
+FROM base as production-deps
 
-FROM deps AS builder
+WORKDIR /myapp
 
-WORKDIR /app
+COPY --from=deps /myapp/node_modules /myapp/node_modules
+ADD package.json .npmrc ./
+RUN npm prune --omit=dev
 
-COPY . .
+# Build the app
+FROM base as build
 
+WORKDIR /myapp
+
+COPY --from=deps /myapp/node_modules /myapp/node_modules
+
+ADD prisma .
+RUN npx prisma generate
+
+ADD . .
 RUN npm run build
 
-FROM deps AS prod-deps
+FROM base
 
-WORKDIR /app
+WORKDIR /myapp
 
-RUN npm install --production
+COPY --from=production-deps /myapp/node_modules /myapp/node_modules
+COPY --from=build /myapp/node_modules/.prisma /myapp/node_modules/.prisma
 
-FROM base as runner
+COPY --from=build /myapp/build /myapp/build
+COPY --from=build /myapp/public /myapp/public
+COPY --from=build /myapp/package.json /myapp/package.json
+COPY --from=build /myapp/prisma /myapp/prisma
 
-WORKDIR /app
+COPY --from=build /myapp/entrypoint.sh /myapp/entrypoint.sh
+RUN chmod +x /myapp/entrypoint.sh
 
-RUN addgroup --system --gid 1001 remix
-RUN adduser --system --uid 1001 remix
-
-USER remix
-
-COPY --from=prod-deps --chown=remix:remix /app/package*.json ./
-COPY --from=prod-deps --chown=remix:remix /app/node_modules ./node_modules
-COPY --from=builder --chown=remix:remix /app/build ./build
-COPY --from=builder --chown=remix:remix /app/public ./public
-
-ENTRYPOINT [ "node", "node_modules/.bin/remix-serve", "build/index.js"]
+ENTRYPOINT [ "/myapp/entrypoint.sh" ]

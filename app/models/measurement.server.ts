@@ -101,25 +101,36 @@ export async function getMeasurementsLast24Hours(measurePoint: MeasurePoint) {
 }
 */
 
-export async function getMeasurementsLast24Hours(measurePoint: MeasurePoint): Promise<MeasurementAverage[]> {
+export async function getMeasurementsForChart(measurePoint: MeasurePoint): Promise<MeasurementAverage[]> {
+    const now = new Date();
+    const startOfCurrentDay = new Date();
+    startOfCurrentDay.setHours(6, 0, 0, 0);
+
+    // If current time is after 01:00 of the next day, set the end time to 01:00
+    const endOfCurrentDay = new Date();
+    if (now.getHours() >= 1) {
+        endOfCurrentDay.setDate(endOfCurrentDay.getDate() + 1);
+        endOfCurrentDay.setHours(1, 0, 0, 0);
+    } else {
+        endOfCurrentDay.setTime(now.getTime());
+    }
+
     const result = await db.$queryRawUnsafe(`
         SELECT DATE_TRUNC('hour', "createdAt") + INTERVAL '15 minutes' * FLOOR(EXTRACT(MINUTE FROM "createdAt") / 15) as interval, AVG (value) as average_value
         FROM
             "Measurements"
         WHERE
             "measurePoint"::text = $1
-          AND "createdAt" >= NOW() - INTERVAL '24 hours'
-          AND "createdAt"
-            < NOW()
+          AND "createdAt" >= $2
+          AND "createdAt" < $3
         GROUP BY
             interval
         ORDER BY
             interval ASC
-    `, measurePoint.toString().toUpperCase());
+    `, measurePoint.toString().toUpperCase(), startOfCurrentDay, endOfCurrentDay);
 
     return result as MeasurementAverage[];
 }
-
 
 export async function getTemperatureDifference(measurePoint: MeasurePoint): Promise<TemperatureDifference | undefined> {
     const today = new Date();
